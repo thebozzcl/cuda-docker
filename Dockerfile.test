@@ -1,0 +1,38 @@
+# GLOBAL ARGS
+ARG CUDA_BASE_IMAGE=tegra-cuda-base
+ARG TAG_BUILD=build
+ARG TAG_RUN=run
+
+ARG CUDA_SAMPLE_DIR=/usr/local/cuda/samples/
+
+# BUILD STAGE -----------------------------------------------------------------
+FROM ${CUDA_BASE_IMAGE}:${TAG_BUILD} AS builder
+
+ARG CUDA_SAMPLE_DIR
+ARG TARGETS="."
+
+RUN export CUDA_VERSION=`cat /usr/local/cuda/version.txt \
+    | cut -d " " -f3 \
+    | cut -d "." -f1,2` \
+  && echo "Build for cuda $CUDA_VERSION" \
+  && cd ${CUDA_SAMPLE_DIR} \
+  && echo Build following projects: `\
+    find ${TARGETS} -name Makefile \
+    | sed "s/Makefile//g" \
+    | sed "s/\.\///g"`\
+  && PROJECTS=` find ${TARGETS} -name Makefile \
+    | sed "s/Makefile//g" \
+    | sed "s/\.\///g" ` \
+    make -j `nproc`
+
+
+# RUN STAGE -------------------------------------------------------------------
+FROM ${CUDA_BASE_IMAGE}:${TAG_RUN} as tester
+
+ARG CUDA_SAMPLE_DIR
+ARG SAMPLE_DEST=/compiled-samples
+
+WORKDIR ${SAMPLE_DEST}
+COPY --from=builder ${CUDA_SAMPLE_DIR}/bin/aarch64/linux/release/ ${SAMPLE_DEST}
+
+CMD [ "/bin/bash" ]
